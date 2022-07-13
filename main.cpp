@@ -3,7 +3,7 @@
 #include <string>
 #include <raylib.h>
 
-// #define DEBUG
+//#define DEBUG
 #define DEV
 
 #define RLIGHTS_IMPLEMENTATION
@@ -15,7 +15,8 @@
 #define GLSL_VERSION 100
 #endif
 
-#define RENDER_DISTANCE 22
+#define RAYGUI_IMPLEMENTATION
+#include "raygui.h"
 
 struct Wall
 {
@@ -31,8 +32,11 @@ struct Wall
 
 int mapSize = 32;
 int wallHeight = 5;
-int roofHeight = 5;
-int roofOffset = 5;
+int roofHeight = 0;
+int roofOffset = 0;
+int wallTexture = 0;
+int roofTexture = 0;
+int RENDER_DISTANCE = 22;
 
 std::vector<Wall> walls;
 
@@ -51,7 +55,7 @@ int main(void)
     SetConfigFlags(FLAG_VSYNC_HINT);
     InitWindow(screenWidth, screenHeight, "NGIN");
 
-    std::vector<Texture2D> textures = {LoadTexture("assets/wall.png"), LoadTexture("assets/floor.png")};
+    std::vector<Texture2D> textures = {LoadTexture("assets/wall1.png"), LoadTexture("assets/floor.png")};
     std::vector<Model> models = {};
     std::vector<Model> lowLODModels = {};
     std::vector<Model> planes = {};
@@ -134,6 +138,13 @@ int main(void)
 
     // SetTargetFPS(60);                           // Set our game to run at 60 frames-per-second
     //--------------------------------------------------------------------------------------
+
+    bool editWallHeight = false;
+    bool editRoofHeight = false;
+    bool editRoofOffset = false;
+    bool editWallTexture = false;
+    bool editRoofTexture = false;
+    // bool editWallHeight = false;
 
     // Main game loop
     while (!WindowShouldClose()) // Detect window close button or ESC key
@@ -251,7 +262,7 @@ int main(void)
 
                 DrawTextEx(GetFontDefault(), (std::to_string((int)wall.height)).c_str(), Vector2{-offsetX + 0.1f, -offsetY + 0.1f}, 0.8f, 0.8f / 10, RAYWHITE);
 
-                if (IsMouseButtonDown(0) || IsMouseButtonDown(1))
+                if (IsMouseButtonDown(0) && GetMousePosition().x < wx - 130 || IsMouseButtonDown(1) && GetMousePosition().x < wx - 130)
                 {
                     Vector2 p = GetScreenToWorld2D(GetMousePosition(), editorCamera);
                     Vector2 m = Vector2{floor((-p.x + 2)), floor((-p.y + 2))};
@@ -260,22 +271,37 @@ int main(void)
                         m.y > offsetY - 1 && m.y < offsetY + 2)
                     {
                         if (IsMouseButtonDown(0))
-                            walls[i] = Wall{0, wallHeight, 2, 2, roofOffset, roofHeight, 1, 0};
+                            walls[i] = Wall{0, wallHeight, 2, 2, roofOffset, roofHeight, wallTexture, roofTexture};
                         else if (IsMouseButtonDown(1))
                             walls[i] = Wall{0, 0, 2, 2, 0, 0, 1};
                     }
                 }
             }
 
-            DrawCircle(-playerPosition.x, -playerPosition.z, 0.5f, GREEN);
+            DrawCircle(-playerPosition.x, -playerPosition.z, 0.45f, GREEN);
 
             EndMode2D();
 
-            Vector2 p = GetScreenToWorld2D(GetMousePosition(), editorCamera);
+            DrawRectangle(wx - 220, 0, 220, wy, LIGHTGRAY);
+            if (GuiValueBox((Rectangle){wx - 110, 10, 100, 30}, "Wall Height", &wallHeight, 0, 100, editWallHeight))
+                editWallHeight = !editWallHeight;
+            if (GuiValueBox((Rectangle){wx - 110, 40, 100, 30}, "Roof Height", &roofHeight, 0, 100, editRoofHeight))
+                editRoofHeight = !editRoofHeight;
+            if (GuiValueBox((Rectangle){wx - 110, 70, 100, 30}, "Roof Offset", &roofOffset, 0, 100, editRoofOffset))
+                editRoofOffset = !editRoofOffset;
+            if (GuiValueBox((Rectangle){wx - 110, 100, 100, 30}, "Wall Texture", &wallTexture, 0, 100, editWallTexture))
+                editWallTexture = !editWallTexture;
+            if (GuiValueBox((Rectangle){wx - 110, 130, 100, 30}, "Roof Texture", &roofTexture, 0, 100, editRoofTexture))
+                editRoofTexture = !editRoofTexture;
 
-            DrawText(("MX: " + std::to_string(floor((-p.x + 2) / 2)) + " MY: " + std::to_string(floor((-p.y + 2) / 2))).c_str(), 10, 30, 20, GREEN);
-            DrawText(("Wall Height: " + std::to_string(wallHeight)).c_str(), 10, 50, 20, GREEN);
-            DrawText(("Roof Offset: " + std::to_string(roofOffset)).c_str(), 10, 70, 20, GREEN);
+            // wallHeight = GuiSliderBar((Rectangle){ wx - 130, 10, 100, 20}, "Wall Height", std::to_string(wallHeight).c_str(), wallHeight, 0, 15);
+            // roofHeight = GuiSliderBar((Rectangle){ wx - 130, 30, 100, 20}, "Roof Height", std::to_string(roofHeight).c_str(), roofHeight, 0, 15);
+            // roofOffset = GuiSliderBar((Rectangle){ wx - 130, 50, 100, 20}, "Roof Offset", std::to_string(roofOffset).c_str(), roofOffset, 0, 15);
+            // wallTexture = GuiSliderBar((Rectangle){ wx - 130, 70, 100, 20}, "Wall Texture", std::to_string(wallTexture).c_str(), wallTexture, 0, textures.size());
+            // roofTexture = GuiSliderBar((Rectangle){ wx - 130, 160, 100, 20}, "Roof Texture", std::to_string(roofTexture).c_str(), roofTexture, 0, textures.size());
+
+            // DrawTexturePro(textures[wallTexture], Rectangle{0, 0, textures[wallTexture].width, textures[wallTexture].height}, Rectangle{0, 0, 32, 32}, Vector2{130, 80}, 0.0f, WHITE);
+            // DrawTexturePro(textures[roofTexture], Rectangle{0, 0, textures[roofTexture].width, textures[roofTexture].height}, Rectangle{0, 0, 32, 32}, Vector2{130, 170}, 0.0f, WHITE);
         }
         else
         {
@@ -363,7 +389,8 @@ int main(void)
                         playerPosition = Vector3Add(playerPosition, difference);
                     }
                 }
-                else if (!noCollide && wall.roofHeight != 0 && CheckCollisionBoxes(BoundingBox{Vector3{playerPosition.x - 0.2f, playerPosition.y - 2, playerPosition.z - 0.2f}, Vector3{playerPosition.x + 0.2f, playerPosition.y, playerPosition.z + 0.2f}}, BoundingBox{Vector3{offsetX - 1, wall.y + wall.height + wall.roofOffset, offsetY - 1}, Vector3{offsetX + 1, wall.y + wall.height + wall.roofOffset + wall.roofHeight, offsetY + 1}}))
+
+                if (!noCollide && wall.roofHeight != 0 && CheckCollisionBoxes(BoundingBox{Vector3{playerPosition.x - 0.2f, playerPosition.y - 2, playerPosition.z - 0.2f}, Vector3{playerPosition.x + 0.2f, playerPosition.y, playerPosition.z + 0.2f}}, BoundingBox{Vector3{offsetX - 1, wall.y + wall.height + wall.roofOffset, offsetY - 1}, Vector3{offsetX + 1, wall.y + wall.height + wall.roofOffset + wall.roofHeight, offsetY + 1}}))
                 {
                     if ((wall.y + wall.height + wall.roofOffset + wall.roofHeight) - playerPosition.y < 0)
                     {
