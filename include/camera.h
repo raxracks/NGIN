@@ -3,32 +3,32 @@
 #include "raymath.h"
 #include "mouse.h"
 
-#define PLAYER_MOVEMENT_SENSITIVITY 8
+#define PLAYER_MOVEMENT_SENSITIVITY 10
 
 Vector3 playerRotation = (Vector3){0, -1025 * DEG2RAD, 0};
 
 float steps = 0;
 
-void UpdateGameCamera(Camera *camera, Vector3 *playerPos)
+void UpdateGameCamera(Camera *camera, Vector3 *playerPos, float deltaTime)
 {
     bool direction[4] = {IsKeyDown(KEY_W),
                          IsKeyDown(KEY_S),
                          IsKeyDown(KEY_D),
                          IsKeyDown(KEY_A)};
 
-    if(direction[0] || direction[1] || direction[2] ||direction[3]) steps += 0.1f;
-
+    if(direction[0] || direction[1] || direction[2] ||direction[3]) steps += deltaTime * 10;
+    
     playerPos->x += (sinf(playerRotation.x) * direction[1] -
                      sinf(playerRotation.x) * direction[0] -
                      cosf(playerRotation.x) * direction[3] +
-                     cosf(playerRotation.x) * direction[2]) /
-                    PLAYER_MOVEMENT_SENSITIVITY;
+                     cosf(playerRotation.x) * direction[2]) *
+                    (deltaTime * PLAYER_MOVEMENT_SENSITIVITY);
 
     playerPos->z += (cosf(playerRotation.x) * direction[1] -
                      cosf(playerRotation.x) * direction[0] +
                      sinf(playerRotation.x) * direction[3] -
-                     sinf(playerRotation.x) * direction[2]) /
-                    PLAYER_MOVEMENT_SENSITIVITY;
+                     sinf(playerRotation.x) * direction[2]) *
+                    (deltaTime * PLAYER_MOVEMENT_SENSITIVITY);
 
     camera->position.x = playerPos->x;
 
