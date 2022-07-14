@@ -1,3 +1,5 @@
+// fuck this code is a fucking mess
+
 #include "camera.h"
 #include <vector>
 #include <string>
@@ -28,14 +30,37 @@ struct Wall
     float roofHeight = 0.0f;
     int modelIndex;
     int roofIndex;
+    int triggerAction = -1;
+    Vector2 target;
+    Vector2 wallTriggerData;
+    Vector2 roofTriggerData;
+    bool triggered = false;
+    bool triggeredForever = false;
+    int triggerSpeed;
+    bool reversed = false;
 };
 
+struct MovingWall
+{
+    int target;
+    Vector2 wallTriggerData;
+    Vector2 roofTriggerData;
+    int speed;
+};
+
+// my god
 int mapSize = 32;
 int wallHeight = 5;
 int roofHeight = 0;
 int roofOffset = 0;
 int wallTexture = 0;
 int roofTexture = 0;
+int triggerAction = -1;
+Vector2 triggerTarget;
+int triggerData1 = 0;
+int triggerData2 = 0;
+int triggerSpeed = 5;
+bool isPermanent = false;
 int RENDER_DISTANCE = 22;
 
 std::vector<Wall> walls;
@@ -52,7 +77,7 @@ int main(void)
     bool collidedLastFrame = false;
     bool editing = false;
 
-    SetConfigFlags(FLAG_VSYNC_HINT);
+    SetConfigFlags(FLAG_VSYNC_HINT | FLAG_FULLSCREEN_MODE);
     InitWindow(screenWidth, screenHeight, "NGIN");
 
     std::vector<Texture2D> textures = {LoadTexture("assets/wall1.png"), LoadTexture("assets/floor.png")};
@@ -134,6 +159,8 @@ int main(void)
     Vector3 playerPosition = Vector3{4.0f, 2.0f, 4.0f};
     Vector3 playerPosNoCollide = Vector3{0, 0, 0};
 
+    std::vector<MovingWall> movingWalls;
+
     float maxPlayerPosY = playerPosition.y;
 
     // SetTargetFPS(60);                           // Set our game to run at 60 frames-per-second
@@ -144,7 +171,18 @@ int main(void)
     bool editRoofOffset = false;
     bool editWallTexture = false;
     bool editRoofTexture = false;
-    // bool editWallHeight = false;
+    // bool editTriggerAction = false;
+    int triggerActionScrollIndex = 0;
+    bool editTriggerData1 = false;
+    bool editTriggerData2 = false;
+    bool selectingTarget = false;
+    bool editTriggerSpeed = false;
+    bool isTrigger = false;
+    bool useSelfAsTarget = false;
+
+    float preventExtraClick = 0.0f;
+
+    const Color clearColor = Color{116, 115, 114, 255};
 
     // Main game loop
     while (!WindowShouldClose()) // Detect window close button or ESC key
@@ -179,26 +217,6 @@ int main(void)
 
             EnableCursor();
 
-            if (IsKeyPressed(KEY_EQUAL))
-            {
-                wallHeight++;
-            }
-
-            if (IsKeyPressed(KEY_MINUS))
-            {
-                wallHeight--;
-            }
-
-            if (IsKeyPressed(KEY_LEFT_BRACKET))
-            {
-                roofOffset--;
-            }
-
-            if (IsKeyPressed(KEY_RIGHT_BRACKET))
-            {
-                roofOffset++;
-            }
-
             if (IsKeyDown(KEY_RIGHT))
                 editorCamera.offset.x -= 5;
             else if (IsKeyDown(KEY_LEFT))
@@ -222,6 +240,68 @@ int main(void)
         else
         {
             DisableCursor();
+        }
+
+        for (int i = 0; i < movingWalls.size(); i++)
+        {
+            MovingWall wall = movingWalls[i];
+            Wall targetWall = walls[wall.target];
+
+            bool done = false;
+
+            if (targetWall.reversed)
+            {
+                float temp = targetWall.wallTriggerData.x;
+                targetWall.wallTriggerData.x = targetWall.wallTriggerData.y;
+                targetWall.wallTriggerData.y = temp;
+            }
+
+            if (targetWall.wallTriggerData.x < targetWall.wallTriggerData.y)
+            {
+                if (targetWall.height > targetWall.wallTriggerData.y)
+                    done = true;
+                else if (targetWall.height < targetWall.wallTriggerData.y)
+                    walls[wall.target].height += (wall.speed / 10.0f) * deltaTime;
+            }
+            else if (targetWall.wallTriggerData.x > targetWall.wallTriggerData.y)
+            {
+                if (targetWall.height < targetWall.wallTriggerData.y)
+                    done = true;
+                else if (targetWall.height > targetWall.wallTriggerData.y)
+                    walls[wall.target].height -= (wall.speed / 10.0f) * deltaTime;
+            }
+            else
+            {
+                done = true;
+            }
+
+            if (targetWall.roofTriggerData.x < targetWall.roofTriggerData.y)
+            {
+                if (targetWall.roofOffset > targetWall.roofTriggerData.y && done)
+                    movingWalls.erase(movingWalls.begin() + i);
+                else if (targetWall.roofOffset < targetWall.roofTriggerData.y)
+                    walls[wall.target].roofOffset += (wall.speed / 10.0f) * deltaTime;
+            }
+            else if (targetWall.roofTriggerData.x > targetWall.roofTriggerData.y)
+            {
+                if (targetWall.roofOffset < targetWall.roofTriggerData.y && done)
+                    movingWalls.erase(movingWalls.begin() + i);
+                else if (targetWall.roofOffset > targetWall.roofTriggerData.y)
+                    walls[wall.target].roofOffset -= (wall.speed / 10.0f) * deltaTime;
+            }
+            else
+            {
+                if (done)
+                {
+                    walls[wall.target].triggered = targetWall.triggeredForever;
+                    walls[wall.target].reversed = !targetWall.reversed;
+
+                    walls[wall.target].height = targetWall.wallTriggerData.y;
+                    walls[wall.target].roofOffset = targetWall.roofTriggerData.y;
+
+                    movingWalls.erase(movingWalls.begin() + i);
+                }
+            }
         }
 
         //----------------------------------------------------------------------------------
@@ -248,6 +328,39 @@ int main(void)
 
                 const Texture2D texture = textures[wall.modelIndex];
 
+                if (preventExtraClick <= 0.0f && IsMouseButtonDown(0) && GetMousePosition().x < wx - 240 || preventExtraClick <= 0.0f && IsMouseButtonDown(1) && GetMousePosition().x < wx - 240)
+                {
+                    Vector2 p = GetScreenToWorld2D(GetMousePosition(), editorCamera);
+                    Vector2 m = Vector2{floor((-p.x + 2)), floor((-p.y + 2))};
+
+                    if (!selectingTarget)
+                    {
+                        if (m.x > offsetX - 1 && m.x < offsetX + 2 &&
+                            m.y > offsetY - 1 && m.y < offsetY + 2)
+                        {
+                            if (IsMouseButtonDown(0))
+                                walls[i] = Wall{0, wallHeight, 2, 2, roofOffset, roofHeight, wallTexture, roofTexture, isTrigger ? 0 : -1, useSelfAsTarget ? Vector2{m.x / 2, m.y / 2} : triggerTarget, Vector2{wallHeight, triggerData1}, Vector2{roofOffset, triggerData2}, false, isPermanent, triggerSpeed};
+                            else if (IsMouseButtonDown(1))
+                                walls[i] = Wall{0, 0, 2, 2, 0, 0, 1};
+                        }
+                    }
+                    else
+                    {
+                        triggerTarget = Vector2{m.x / 2, m.y / 2};
+                        selectingTarget = false;
+                        preventExtraClick = 100.0f;
+                    }
+                }
+
+                preventExtraClick -= GetFrameTime();
+
+                if (wall.height == 0 && wall.roofHeight == 0)
+                {
+                    DrawRectangleLinesEx(Rectangle{-offsetX, -offsetY, 2, 2}, 0.035f, LIGHTGRAY);
+
+                    continue;
+                }
+
                 if (wall.roofHeight != 0)
                 {
                     DrawTexturePro(texture, Rectangle{0, 0, texture.width, texture.height}, Rectangle{0, 0, 1, 2}, Vector2{offsetX, offsetY}, 0.0f, WHITE);
@@ -261,28 +374,13 @@ int main(void)
                 DrawRectangleLinesEx(Rectangle{-offsetX, -offsetY, 2, 2}, 0.035f, BLACK);
 
                 DrawTextEx(GetFontDefault(), (std::to_string((int)wall.height)).c_str(), Vector2{-offsetX + 0.1f, -offsetY + 0.1f}, 0.8f, 0.8f / 10, RAYWHITE);
-
-                if (IsMouseButtonDown(0) && GetMousePosition().x < wx - 130 || IsMouseButtonDown(1) && GetMousePosition().x < wx - 130)
-                {
-                    Vector2 p = GetScreenToWorld2D(GetMousePosition(), editorCamera);
-                    Vector2 m = Vector2{floor((-p.x + 2)), floor((-p.y + 2))};
-
-                    if (m.x > offsetX - 1 && m.x < offsetX + 2 &&
-                        m.y > offsetY - 1 && m.y < offsetY + 2)
-                    {
-                        if (IsMouseButtonDown(0))
-                            walls[i] = Wall{0, wallHeight, 2, 2, roofOffset, roofHeight, wallTexture, roofTexture};
-                        else if (IsMouseButtonDown(1))
-                            walls[i] = Wall{0, 0, 2, 2, 0, 0, 1};
-                    }
-                }
             }
 
             DrawCircle(-playerPosition.x, -playerPosition.z, 0.45f, GREEN);
 
             EndMode2D();
 
-            DrawRectangle(wx - 220, 0, 220, wy, LIGHTGRAY);
+            DrawRectangle(wx - 240, 0, 240, wy, LIGHTGRAY);
             if (GuiValueBox((Rectangle){wx - 110, 10, 100, 30}, "Wall Height", &wallHeight, 0, 100, editWallHeight))
                 editWallHeight = !editWallHeight;
             if (GuiValueBox((Rectangle){wx - 110, 40, 100, 30}, "Roof Height", &roofHeight, 0, 100, editRoofHeight))
@@ -291,21 +389,34 @@ int main(void)
                 editRoofOffset = !editRoofOffset;
             if (GuiValueBox((Rectangle){wx - 110, 100, 100, 30}, "Wall Texture", &wallTexture, 0, 100, editWallTexture))
                 editWallTexture = !editWallTexture;
-            if (GuiValueBox((Rectangle){wx - 110, 130, 100, 30}, "Roof Texture", &roofTexture, 0, 100, editRoofTexture))
+            if (GuiValueBox((Rectangle){wx - 110, 162, 100, 30}, "Roof Texture", &roofTexture, 0, 100, editRoofTexture))
                 editRoofTexture = !editRoofTexture;
+            isTrigger = GuiCheckBox((Rectangle){wx - 150, 224, 30, 30}, "Is Trigger", isTrigger);
 
-            // wallHeight = GuiSliderBar((Rectangle){ wx - 130, 10, 100, 20}, "Wall Height", std::to_string(wallHeight).c_str(), wallHeight, 0, 15);
-            // roofHeight = GuiSliderBar((Rectangle){ wx - 130, 30, 100, 20}, "Roof Height", std::to_string(roofHeight).c_str(), roofHeight, 0, 15);
-            // roofOffset = GuiSliderBar((Rectangle){ wx - 130, 50, 100, 20}, "Roof Offset", std::to_string(roofOffset).c_str(), roofOffset, 0, 15);
-            // wallTexture = GuiSliderBar((Rectangle){ wx - 130, 70, 100, 20}, "Wall Texture", std::to_string(wallTexture).c_str(), wallTexture, 0, textures.size());
-            // roofTexture = GuiSliderBar((Rectangle){ wx - 130, 160, 100, 20}, "Roof Texture", std::to_string(roofTexture).c_str(), roofTexture, 0, textures.size());
+            if (isTrigger)
+            {
+                if (!useSelfAsTarget)
+                    if (GuiLabelButton((Rectangle){wx - 195, 314, 100, 30}, "Trigger Target"))
+                        selectingTarget = true;
+                if (GuiValueBox((Rectangle){wx - 110, 344, 100, 30}, "Triggered Wall Height", &triggerData1, 0, 100, editTriggerData1))
+                    editTriggerData1 = !editTriggerData1;
+                if (GuiValueBox((Rectangle){wx - 110, 374, 100, 30}, "Triggered Roof Offset", &triggerData2, 0, 100, editTriggerData2))
+                    editTriggerData2 = !editTriggerData2;
+                if (GuiValueBox((Rectangle){wx - 110, 404, 100, 30}, "Trigger Speed", &triggerSpeed, 0, 1000, editTriggerSpeed))
+                    editTriggerSpeed = !editTriggerSpeed;
+                isPermanent = GuiCheckBox((Rectangle){wx - 150, 254, 30, 30}, "Is Permanent", isPermanent);
+                useSelfAsTarget = GuiCheckBox((Rectangle){wx - 150, 284, 30, 30}, "Use Self as Target", useSelfAsTarget);
 
-            // DrawTexturePro(textures[wallTexture], Rectangle{0, 0, textures[wallTexture].width, textures[wallTexture].height}, Rectangle{0, 0, 32, 32}, Vector2{130, 80}, 0.0f, WHITE);
-            // DrawTexturePro(textures[roofTexture], Rectangle{0, 0, textures[roofTexture].width, textures[roofTexture].height}, Rectangle{0, 0, 32, 32}, Vector2{130, 170}, 0.0f, WHITE);
+                if (!useSelfAsTarget)
+                    GuiLabel((Rectangle){wx - 105, 314, 100, 30}, ("X: " + std::to_string((int)triggerTarget.x) + ", Y: " + std::to_string((int)triggerTarget.y)).c_str());
+            }
+
+            DrawTexturePro(textures[wallTexture], Rectangle{0, 0, textures[wallTexture].width, textures[wallTexture].height}, Rectangle{0, 0, 32, 32}, Vector2{-(wx - 110), -130}, 0.0f, WHITE);
+            DrawTexturePro(textures[roofTexture], Rectangle{0, 0, textures[roofTexture].width, textures[roofTexture].height}, Rectangle{0, 0, 32, 32}, Vector2{-(wx - 110), -192}, 0.0f, WHITE);
         }
         else
         {
-            ClearBackground(Color{116, 115, 114, 255});
+            ClearBackground(clearColor);
 
             BeginMode3D(camera);
 
@@ -328,9 +439,9 @@ int main(void)
                 {
                     if (wall.height != 0)
                     {
-                        DrawModelEx(lowLODModels[wall.modelIndex], Vector3{offsetX, (wall.height / 2) + wall.y, offsetY}, Vector3{0, 0, 0}, 0.0f, Vector3{wall.width, wall.height, wall.depth}, Color{116, 115, 114, 255});
+                        DrawModelEx(lowLODModels[wall.modelIndex], Vector3{offsetX, (wall.height / 2) + wall.y, offsetY}, Vector3{0, 0, 0}, 0.0f, Vector3{wall.width, wall.height, wall.depth}, clearColor);
                         if (wall.roofHeight != 0)
-                            DrawModelEx(lowLODModels[wall.roofIndex], Vector3{offsetX, wall.y + wall.height + wall.roofOffset, offsetY}, Vector3{0, 0, 0}, 0.0f, Vector3{wall.width, wall.roofHeight, wall.depth}, Color{116, 115, 114, 255});
+                            DrawModelEx(lowLODModels[wall.roofIndex], Vector3{offsetX, wall.y + wall.height + wall.roofOffset, offsetY}, Vector3{0, 0, 0}, 0.0f, Vector3{wall.width, wall.roofHeight, wall.depth}, clearColor);
                     }
                     else
                         DrawModelEx(planes[wall.modelIndex], Vector3{offsetX, (wall.height / 2) + wall.y, offsetY}, Vector3{0, 0, 0}, 0.0f, Vector3{wall.width, wall.height, wall.depth}, WHITE);
@@ -363,6 +474,18 @@ int main(void)
                                           Vector3{offsetX - 1, wall.y, offsetY - 1},
                                           Vector3{offsetX + 1, wall.y + wall.height, offsetY + 1}}))
                 {
+                    if (wall.triggerAction >= 0)
+                    {
+                        int target = (int)(mapSize * (int)wall.target.x + (int)wall.target.y);
+
+                        if (!walls[target].triggered)
+                        {
+                            MovingWall mvWall = {target, wall.wallTriggerData, wall.roofTriggerData, wall.triggerSpeed};
+                            movingWalls.push_back(mvWall);
+                            walls[target].triggered = true;
+                        }
+                    }
+
                     if (wall.height == 0)
                         maxPlayerPosY = wall.y + 2;
 
@@ -392,6 +515,18 @@ int main(void)
 
                 if (!noCollide && wall.roofHeight != 0 && CheckCollisionBoxes(BoundingBox{Vector3{playerPosition.x - 0.2f, playerPosition.y - 2, playerPosition.z - 0.2f}, Vector3{playerPosition.x + 0.2f, playerPosition.y, playerPosition.z + 0.2f}}, BoundingBox{Vector3{offsetX - 1, wall.y + wall.height + wall.roofOffset, offsetY - 1}, Vector3{offsetX + 1, wall.y + wall.height + wall.roofOffset + wall.roofHeight, offsetY + 1}}))
                 {
+                    if (wall.triggerAction >= 0)
+                    {
+                        int target = (int)(mapSize * (int)wall.target.x + (int)wall.target.y);
+
+                        if (!walls[target].triggered)
+                        {
+                            MovingWall mvWall = {target, wall.wallTriggerData, wall.roofTriggerData, wall.triggerSpeed};
+                            movingWalls.push_back(mvWall);
+                            walls[target].triggered = true;
+                        }
+                    }
+
                     if ((wall.y + wall.height + wall.roofOffset + wall.roofHeight) - playerPosition.y < 0)
                     {
                         playerPosition.y = wall.y + wall.height + wall.roofOffset + wall.roofHeight + 2;
@@ -445,6 +580,8 @@ int main(void)
         }
 
         DrawFPS(10, 10);
+
+        DrawText((std::to_string(movingWalls.size())).c_str(), 10, 30, 20, RED);
 
         EndDrawing();
         //----------------------------------------------------------------------------------
