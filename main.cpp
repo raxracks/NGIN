@@ -50,17 +50,7 @@ struct MovingWall
 
 // my god
 int mapSize = 32;
-int wallHeight = 5;
-int roofHeight = 0;
-int roofOffset = 0;
-int wallTexture = 0;
-int roofTexture = 0;
-int triggerAction = -1;
-Vector2 triggerTarget;
-int triggerData1 = 0;
-int triggerData2 = 0;
-int triggerSpeed = 5;
-bool isPermanent = false;
+
 int RENDER_DISTANCE = 22;
 
 std::vector<Wall> walls;
@@ -77,7 +67,8 @@ int main(void)
     bool collidedLastFrame = false;
     bool editing = false;
 
-    SetConfigFlags(FLAG_VSYNC_HINT | FLAG_FULLSCREEN_MODE);
+    // SetConfigFlags(FLAG_VSYNC_HINT | FLAG_FULLSCREEN_MODE);
+    SetConfigFlags(FLAG_VSYNC_HINT);
     InitWindow(screenWidth, screenHeight, "NGIN");
 
     std::vector<Texture2D> textures = {LoadTexture("assets/wall1.png"), LoadTexture("assets/floor.png")};
@@ -166,19 +157,31 @@ int main(void)
     // SetTargetFPS(60);                           // Set our game to run at 60 frames-per-second
     //--------------------------------------------------------------------------------------
 
+    int wallHeight = 5;
+    int roofHeight = 0;
+    int roofOffset = 0;
+    int wallTexture = 0;
+    int roofTexture = 0;
+    int triggerAction = -1;
+    Vector2 triggerTarget;
+    int triggerData1 = 0;
+    int triggerData2 = 0;
+    int triggerSpeed = 5;
+    int triggerActionScrollIndex = 0;
+
     bool editWallHeight = false;
     bool editRoofHeight = false;
     bool editRoofOffset = false;
     bool editWallTexture = false;
     bool editRoofTexture = false;
     // bool editTriggerAction = false;
-    int triggerActionScrollIndex = 0;
     bool editTriggerData1 = false;
     bool editTriggerData2 = false;
     bool selectingTarget = false;
     bool editTriggerSpeed = false;
     bool isTrigger = false;
-    bool useSelfAsTarget = false;
+    bool useSelfAsTarget = true;
+    bool isPermanent = false;
 
     float preventExtraClick = 0.0f;
 
@@ -254,6 +257,10 @@ int main(void)
                 float temp = targetWall.wallTriggerData.x;
                 targetWall.wallTriggerData.x = targetWall.wallTriggerData.y;
                 targetWall.wallTriggerData.y = temp;
+
+                temp = targetWall.roofTriggerData.x;
+                targetWall.roofTriggerData.x = targetWall.roofTriggerData.y;
+                targetWall.roofTriggerData.y = temp;
             }
 
             if (targetWall.wallTriggerData.x < targetWall.wallTriggerData.y)
@@ -278,14 +285,14 @@ int main(void)
             if (targetWall.roofTriggerData.x < targetWall.roofTriggerData.y)
             {
                 if (targetWall.roofOffset > targetWall.roofTriggerData.y && done)
-                    movingWalls.erase(movingWalls.begin() + i);
+                    goto remove;
                 else if (targetWall.roofOffset < targetWall.roofTriggerData.y)
                     walls[wall.target].roofOffset += (wall.speed / 10.0f) * deltaTime;
             }
             else if (targetWall.roofTriggerData.x > targetWall.roofTriggerData.y)
             {
                 if (targetWall.roofOffset < targetWall.roofTriggerData.y && done)
-                    movingWalls.erase(movingWalls.begin() + i);
+                    goto remove;
                 else if (targetWall.roofOffset > targetWall.roofTriggerData.y)
                     walls[wall.target].roofOffset -= (wall.speed / 10.0f) * deltaTime;
             }
@@ -293,6 +300,7 @@ int main(void)
             {
                 if (done)
                 {
+                remove:
                     walls[wall.target].triggered = targetWall.triggeredForever;
                     walls[wall.target].reversed = !targetWall.reversed;
 
