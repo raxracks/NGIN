@@ -1,12 +1,7 @@
 // fuck this code is a fucking mess
-
-#include "camera.h"
 #include <vector>
 #include <string>
 #include <raylib.h>
-
-//#define DEBUG
-#define DEV
 
 #define RLIGHTS_IMPLEMENTATION
 #include "rlights.h"
@@ -19,6 +14,11 @@
 
 #define RAYGUI_IMPLEMENTATION
 #include "raygui.h"
+
+#include "camera.h"
+
+//#define DEBUG
+#define DEV
 
 struct Wall
 {
@@ -38,6 +38,7 @@ struct Wall
     bool triggeredForever = false;
     int triggerSpeed;
     bool reversed = false;
+    bool floor = false;
 };
 
 struct MovingWall
@@ -48,7 +49,6 @@ struct MovingWall
     int speed;
 };
 
-// my god
 int mapSize = 32;
 
 int RENDER_DISTANCE = 22;
@@ -133,7 +133,8 @@ int main(void)
 
     for (int i = 0; i < mapSize * mapSize; i++)
     {
-        walls.push_back(Wall{0, 0, 2, 2, 0, 0, 1, 0});
+        // y, height, width, depth, roofOffset, roofHeight, modelIndex, roofIndex, triggerAction, target, wallTriggerData, roofTriggerData, triggered, triggeredForever, triggerSpeed, reversed, floor
+        walls.push_back(Wall{0, 0, 2, 2, 0, 0, 1, 0, -1, Vector2{0, 0}, Vector2{0, 0}, Vector2{0, 0}, false, false, 0, false, true});
     }
 
     // CreateLight(LIGHT_POINT, (Vector3){ 0, 2, 6 }, Vector3Zero(), WHITE, shader);
@@ -157,6 +158,7 @@ int main(void)
     // SetTargetFPS(60);                           // Set our game to run at 60 frames-per-second
     //--------------------------------------------------------------------------------------
 
+    // my god
     int wallHeight = 5;
     int roofHeight = 0;
     int roofOffset = 0;
@@ -349,7 +351,7 @@ int main(void)
                             if (IsMouseButtonDown(0))
                                 walls[i] = Wall{0, wallHeight, 2, 2, roofOffset, roofHeight, wallTexture, roofTexture, isTrigger ? 0 : -1, useSelfAsTarget ? Vector2{m.x / 2, m.y / 2} : triggerTarget, Vector2{wallHeight, triggerData1}, Vector2{roofOffset, triggerData2}, false, isPermanent, triggerSpeed};
                             else if (IsMouseButtonDown(1))
-                                walls[i] = Wall{0, 0, 2, 2, 0, 0, 1};
+                                walls[i] = Wall{0, 0, 2, 2, 0, 0, 1, 0, -1, Vector2{0, 0}, Vector2{0, 0}, Vector2{0, 0}, false, false, 0, false, true};
                         }
                     }
                     else
@@ -362,13 +364,13 @@ int main(void)
 
                 preventExtraClick -= GetFrameTime();
 
-                if (wall.height == 0 && wall.roofHeight == 0)
+                // if (wall.height == 0 && wall.roofHeight == 0)
+                if (wall.floor)
                 {
                     DrawRectangleLinesEx(Rectangle{-offsetX, -offsetY, 2, 2}, 0.035f, LIGHTGRAY);
 
                     continue;
                 }
-
                 if (wall.roofHeight != 0)
                 {
                     DrawTexturePro(texture, Rectangle{0, 0, texture.width, texture.height}, Rectangle{0, 0, 1, 2}, Vector2{offsetX, offsetY}, 0.0f, WHITE);
@@ -421,6 +423,9 @@ int main(void)
 
             DrawTexturePro(textures[wallTexture], Rectangle{0, 0, textures[wallTexture].width, textures[wallTexture].height}, Rectangle{0, 0, 32, 32}, Vector2{-(wx - 110), -130}, 0.0f, WHITE);
             DrawTexturePro(textures[roofTexture], Rectangle{0, 0, textures[roofTexture].width, textures[roofTexture].height}, Rectangle{0, 0, 32, 32}, Vector2{-(wx - 110), -192}, 0.0f, WHITE);
+
+            if (walls[0].floor)
+                DrawText("floor", 10, 30, 20, GREEN);
         }
         else
         {
@@ -445,7 +450,7 @@ int main(void)
 
                 if (abs(offsetX - playerPosition.x) > RENDER_DISTANCE / 1.8f || abs(offsetY - playerPosition.z) > RENDER_DISTANCE / 1.8f)
                 {
-                    if (wall.height != 0)
+                    if (!wall.floor)
                     {
                         DrawModelEx(lowLODModels[wall.modelIndex], Vector3{offsetX, (wall.height / 2) + wall.y, offsetY}, Vector3{0, 0, 0}, 0.0f, Vector3{wall.width, wall.height, wall.depth}, clearColor);
                         if (wall.roofHeight != 0)
