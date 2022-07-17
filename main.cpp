@@ -31,7 +31,7 @@ struct Wall
     int modelIndex;
     int roofIndex;
     int triggerAction = -1;
-    Vector2 target;
+    std::vector<Vector2> targets;
     Vector2 wallTriggerData;
     Vector2 roofTriggerData;
     bool triggered = false;
@@ -51,7 +51,7 @@ struct MovingWall
 
 int mapSize = 32;
 
-int RENDER_DISTANCE = 22;
+int RENDER_DISTANCE = 30;
 
 std::vector<Wall> walls;
 
@@ -134,7 +134,7 @@ int main(void)
     for (int i = 0; i < mapSize * mapSize; i++)
     {
         // y, height, width, depth, roofOffset, roofHeight, modelIndex, roofIndex, triggerAction, target, wallTriggerData, roofTriggerData, triggered, triggeredForever, triggerSpeed, reversed, floor
-        walls.push_back(Wall{0, 0, 2, 2, 0, 0, 1, 0, -1, Vector2{0, 0}, Vector2{0, 0}, Vector2{0, 0}, false, false, 0, false, true});
+        walls.push_back(Wall{0, 0, 2, 2, 0, 0, 1, 0, -1, std::vector<Vector2>{Vector2{0, 0}}, Vector2{0, 0}, Vector2{0, 0}, false, false, 0, false, true});
     }
 
     // CreateLight(LIGHT_POINT, (Vector3){ 0, 2, 6 }, Vector3Zero(), WHITE, shader);
@@ -165,7 +165,7 @@ int main(void)
     int wallTexture = 0;
     int roofTexture = 0;
     int triggerAction = -1;
-    Vector2 triggerTarget;
+    std::vector<Vector2> triggerTarget;
     int triggerData1 = 0;
     int triggerData2 = 0;
     int triggerSpeed = 5;
@@ -184,6 +184,7 @@ int main(void)
     bool isTrigger = false;
     bool useSelfAsTarget = true;
     bool isPermanent = false;
+    bool highlightTargets = false;
 
     float preventExtraClick = 0.0f;
 
@@ -240,6 +241,15 @@ int main(void)
             {
                 editorCamera.zoom = 1.0f;
                 editorCamera.rotation = 0.0f;
+            }
+            
+            if (IsKeyPressed(KEY_D)) {
+                selectingTarget = false;
+                preventExtraClick = 100.0f;
+            }
+            
+            if (IsKeyPressed(KEY_C)) {
+                triggerTarget.clear();
             }
         }
         else
@@ -349,16 +359,14 @@ int main(void)
                             m.y > offsetY - 1 && m.y < offsetY + 2)
                         {
                             if (IsMouseButtonDown(0))
-                                walls[i] = Wall{0, wallHeight, 2, 2, roofOffset, roofHeight, wallTexture, roofTexture, isTrigger ? 0 : -1, useSelfAsTarget ? Vector2{m.x / 2, m.y / 2} : triggerTarget, Vector2{wallHeight, triggerData1}, Vector2{roofOffset, triggerData2}, false, isPermanent, triggerSpeed};
+                                walls[i] = Wall{0, wallHeight, 2, 2, roofOffset, roofHeight, wallTexture, roofTexture, isTrigger ? 0 : -1, useSelfAsTarget ? std::vector<Vector2>{Vector2{m.x / 2, m.y / 2}} : triggerTarget, Vector2{wallHeight, triggerData1}, Vector2{roofOffset, triggerData2}, false, isPermanent, triggerSpeed};
                             else if (IsMouseButtonDown(1))
-                                walls[i] = Wall{0, 0, 2, 2, 0, 0, 1, 0, -1, Vector2{0, 0}, Vector2{0, 0}, Vector2{0, 0}, false, false, 0, false, true};
+                                walls[i] = Wall{0, 0, 2, 2, 0, 0, 1, 0, -1, std::vector<Vector2>{Vector2{0, 0}}, Vector2{0, 0}, Vector2{0, 0}, false, false, 0, false, true};
                         }
                     }
                     else
                     {
-                        triggerTarget = Vector2{m.x / 2, m.y / 2};
-                        selectingTarget = false;
-                        preventExtraClick = 100.0f;
+                        triggerTarget.push_back(Vector2{m.x / 2, m.y / 2});
                     }
                 }
 
@@ -382,6 +390,14 @@ int main(void)
                     DrawTexturePro(texture, Rectangle{0, 0, texture.width, texture.height}, Rectangle{0, 0, 2, 2}, Vector2{offsetX, offsetY}, 0.0f, WHITE);
 
                 DrawRectangleLinesEx(Rectangle{-offsetX, -offsetY, 2, 2}, 0.035f, BLACK);
+                
+                if(highlightTargets) {
+                    for(Vector2 t : triggerTarget) {
+                        if(t.x == x && t.y == y) {
+                            DrawRectangleLinesEx(Rectangle{-t.x * 2, -t.y * 2, 2, 2}, 0.035f, RED);
+                        }
+                    }
+                }
 
                 DrawTextEx(GetFontDefault(), (std::to_string((int)wall.height)).c_str(), Vector2{-offsetX + 0.1f, -offsetY + 0.1f}, 0.8f, 0.8f / 10, RAYWHITE);
             }
@@ -418,7 +434,7 @@ int main(void)
                 useSelfAsTarget = GuiCheckBox((Rectangle){wx - 150, 284, 30, 30}, "Use Self as Target", useSelfAsTarget);
 
                 if (!useSelfAsTarget)
-                    GuiLabel((Rectangle){wx - 105, 314, 100, 30}, ("X: " + std::to_string((int)triggerTarget.x) + ", Y: " + std::to_string((int)triggerTarget.y)).c_str());
+                    if(GuiButton((Rectangle){wx - 105, 314, 100, 30}, highlightTargets ? "Hide Targets" : "Show Targets")) highlightTargets = !highlightTargets;
             }
 
             DrawTexturePro(textures[wallTexture], Rectangle{0, 0, textures[wallTexture].width, textures[wallTexture].height}, Rectangle{0, 0, 32, 32}, Vector2{-(wx - 110), -130}, 0.0f, WHITE);
@@ -489,13 +505,19 @@ int main(void)
                 {
                     if (wall.triggerAction >= 0)
                     {
-                        int target = (int)(mapSize * (int)wall.target.x + (int)wall.target.y);
-
-                        if (!walls[target].triggered)
-                        {
-                            MovingWall mvWall = {target, wall.wallTriggerData, wall.roofTriggerData, wall.triggerSpeed};
-                            movingWalls.push_back(mvWall);
-                            walls[target].triggered = true;
+                        std::vector<int> targets;
+                        
+                        for(Vector2 target : wall.targets) {
+                            targets.push_back((int)(mapSize * (int)target.x + (int)target.y));
+                        }
+                        
+                        for(int target : targets) {
+                            if (!walls[target].triggered)
+                            {
+                                MovingWall mvWall = {target, wall.wallTriggerData, wall.roofTriggerData, wall.triggerSpeed};
+                                movingWalls.push_back(mvWall);
+                                walls[target].triggered = true;
+                            }
                         }
                     }
 
@@ -530,13 +552,19 @@ int main(void)
                 {
                     if (wall.triggerAction >= 0)
                     {
-                        int target = (int)(mapSize * (int)wall.target.x + (int)wall.target.y);
-
-                        if (!walls[target].triggered)
-                        {
-                            MovingWall mvWall = {target, wall.wallTriggerData, wall.roofTriggerData, wall.triggerSpeed};
-                            movingWalls.push_back(mvWall);
-                            walls[target].triggered = true;
+                        std::vector<int> targets;
+                        
+                        for(Vector2 target : wall.targets) {
+                            targets.push_back((int)(mapSize * (int)target.x + (int)target.y));
+                        }
+                        
+                        for(int target : targets) {
+                            if (!walls[target].triggered)
+                            {
+                                MovingWall mvWall = {target, wall.wallTriggerData, wall.roofTriggerData, wall.triggerSpeed};
+                                movingWalls.push_back(mvWall);
+                                walls[target].triggered = true;
+                            }
                         }
                     }
 

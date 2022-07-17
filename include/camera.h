@@ -3,7 +3,8 @@
 #include "raymath.h"
 #include "mouse.h"
 
-#define PLAYER_MOVEMENT_SENSITIVITY 10
+#define PLAYER_MOVEMENT_SENSITIVITY 5
+
 
 Vector3 playerRotation = (Vector3){0, -1025 * DEG2RAD, 0};
 
